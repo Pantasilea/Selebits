@@ -147,14 +147,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <None Include=".editorconfig" />
+    <None Include=".gitignore" />
     <None Include="source\.editorconfig" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\adler32.cpp" />
     <ClCompile Include="source\deflate.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\shared.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="source\adler32.hpp" />
     <ClInclude Include="source\deflate.hpp" />
     <ClInclude Include="source\shared.hpp" />
   </ItemGroup>

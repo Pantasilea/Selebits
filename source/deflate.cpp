@@ -2,26 +2,18 @@
 
 #include <algorithm>
 
-constexpr std::strong_ordering sel::impl::deflate::Huffman_code::operator<=>(const Huffman_code& rhs) const
-{
-    if(code < rhs.code) { return std::strong_ordering::less; }
-    else if(code > rhs.code) { return std::strong_ordering::greater; }
-    return std::strong_ordering::equal;
-}
-
 std::vector<std::uint8_t> sel::decompress_deflate(std::span<const std::uint8_t> deflate_data)
 {
     impl::Bitstream bitstream {deflate_data};
-    std::uint32_t bfinal {bitstream.read_bits(1)};
+    std::uint32_t bfinal {bitstream.peek_bits(1)};
     if(bfinal) throw Exception {Error::bad_formed_data};
 
     std::vector<std::uint8_t> inflated_data;
     inflated_data.reserve(5000); // 5KB
-    bool must_continue {true};
-    while(not bfinal or must_continue) {
-        if(bfinal) must_continue = false;
 
-        std::uint32_t btype {bitstream.read_bits(2)};
+    do {
+        bfinal = bitstream.read_bits(1);
+        const std::uint32_t btype {bitstream.read_bits(2)};
         switch(btype) {
             case 0: // no compression
                 bitstream.skip_until_next_byte_boundary();
@@ -36,9 +28,7 @@ std::vector<std::uint8_t> sel::decompress_deflate(std::span<const std::uint8_t> 
             default:
                 throw Exception {Error::bad_formed_data};
         }
-
-        if(must_continue) bfinal = bitstream.read_bits(1);
-    }
+    } while(not bfinal);
 
     return inflated_data;
 }
@@ -48,7 +38,7 @@ void sel::impl::deflate::decompress_uncompressed(std::vector<std::uint8_t>& infl
     std::uint32_t len {bitstream.read_bits(16)};
     std::uint32_t nlen {bitstream.read_bits(16)};
     if(~len != nlen) throw Exception {Error::bad_formed_data};
-    if(len == 0u) return;
+    if(len == 0u) return; // zero length is allowed
 
     std::span<const std::uint8_t> uncompressed_data {bitstream.read_bytes(len)};
     inflated_data.insert(inflated_data.end(), uncompressed_data.begin(), uncompressed_data.end());
@@ -65,18 +55,14 @@ void sel::impl::deflate::decompress_fixed(std::vector<std::uint8_t>& inflated_da
         else {
             if(symbol > 285u) throw Exception {Error::bad_formed_data};
             symbol -= 257u;
-            std::uint32_t length {length_bases[symbol]};
-            const std::uint32_t length_extra {bitstream.read_bits(length_extra_bits[symbol])};
-            length += length_extra;
+            const std::uint32_t length {length_bases[symbol] + bitstream.read_bits(length_extra_bits[symbol])};
             if(length > 258u) throw Exception {Error::bad_formed_data};
 
             // for fixed huffman blocks, a distance huffman code and its symbol have the same values
             symbol = bitstream.read_bits(5);
             symbol = bitswap_from_lsbit(symbol, 5);
             if(symbol > 29u) throw Exception {Error::bad_formed_data};
-            std::uint32_t distance {distance_bases[symbol]};
-            const std::uint32_t distance_extra {bitstream.read_bits(distance_extra_bits[symbol])};
-            distance += distance_extra;
+            const std::uint32_t distance {distance_bases[symbol] + bitstream.read_bits(distance_extra_bits[symbol])};
             if(distance > inflated_data.size() or distance > 32768u) throw Exception {Error::bad_formed_data};
 
             lz77_copy(inflated_data, length, distance);
@@ -111,7 +97,8 @@ void sel::impl::deflate::decompress_dynamic(std::vector<std::uint8_t>& inflated_
     std::vector<std::uint32_t> alphabets_bit_lengths;
     const std::uint32_t hlit_hdist {hlit + hdist};
     alphabets_bit_lengths.reserve(hlit_hdist);
-    for(std::uint32_t i = 0u; i < hlit_hdist; ++i) {
+    // for(std::uint32_t i = 0u; i < hlit_hdist; ++i) <- Cannot be like this
+    while(alphabets_bit_lengths.size() < hlit_hdist) {
         const std::uint32_t symbol {fetch_symbol_in_dynamic_block(code_length_alphabet, bitstream)};
         if(symbol < 16u) {
             alphabets_bit_lengths.push_back(symbol);
@@ -120,19 +107,17 @@ void sel::impl::deflate::decompress_dynamic(std::vector<std::uint8_t>& inflated_
             if(alphabets_bit_lengths.empty()) throw Exception {Error::bad_formed_data};
             const std::uint32_t value_to_copy {alphabets_bit_lengths.back()};
             const std::uint32_t times_to_copy {bitstream.read_bits(2) + 3u};
-            if(alphabets_bit_lengths.size() + times_to_copy > hlit_hdist) throw Exception {Error::bad_formed_data};
             alphabets_bit_lengths.insert(alphabets_bit_lengths.end(), times_to_copy, value_to_copy);
         }
         else if(symbol == 17u) {
             const std::uint32_t times_to_copy {bitstream.read_bits(3) + 3u};
-            if(alphabets_bit_lengths.size() + times_to_copy > hlit_hdist) throw Exception {Error::bad_formed_data};
             alphabets_bit_lengths.insert(alphabets_bit_lengths.end(), times_to_copy, 0u);
         }
         else if(symbol == 18u) {
             const std::uint32_t times_to_copy {bitstream.read_bits(7) + 11u};
-            if(alphabets_bit_lengths.size() + times_to_copy > hlit_hdist) throw Exception {Error::bad_formed_data};
             alphabets_bit_lengths.insert(alphabets_bit_lengths.end(), times_to_copy, 0u);
         }
+        else { throw Exception {Error::bad_formed_data}; }
     }
 
     std::span<const std::uint32_t> literal_length_alphabet_bit_lengths(alphabets_bit_lengths.begin(), hlit);
@@ -159,16 +144,12 @@ void sel::impl::deflate::decompress_dynamic(std::vector<std::uint8_t>& inflated_
             if(distance_alphabet.empty()) throw Exception {Error::bad_formed_data};
             if(symbol > 285u) throw Exception {Error::bad_formed_data};
             symbol -= 257u;
-            std::uint32_t length {length_bases[symbol]};
-            const std::uint32_t length_extra {bitstream.read_bits(length_extra_bits[symbol])};
-            length += length_extra;
+            const std::uint32_t length {length_bases[symbol] + bitstream.read_bits(length_extra_bits[symbol])};
             if(length > 258u) throw Exception {Error::bad_formed_data};
 
             symbol = fetch_symbol_in_dynamic_block(distance_alphabet, bitstream);
             if(symbol > 29u) throw Exception {Error::bad_formed_data};
-            std::uint32_t distance {distance_bases[symbol]};
-            const std::uint32_t distance_extra {bitstream.read_bits(distance_extra_bits[symbol])};
-            distance += distance_extra;
+            const std::uint32_t distance {distance_bases[symbol] + bitstream.read_bits(distance_extra_bits[symbol])};
             if(distance > inflated_data.size() or distance > 32768u) throw Exception {Error::bad_formed_data};
 
             lz77_copy(inflated_data, length, distance);
@@ -181,37 +162,36 @@ void sel::impl::deflate::decompress_dynamic(std::vector<std::uint8_t>& inflated_
 std::vector<sel::impl::deflate::Huffman_code> sel::impl::deflate::make_fixed_huffman_table()
 {
     // bl_count[7 (for example)] == number of codes that have 7 bits
+    /*
     constexpr std::array<std::uint32_t, 10> bl_count {
         0u, 0u, 0u, 0u, 0u, 0u, 0u, 24u, 152u, 112u
     };
+    */
 
+    std::vector<std::uint32_t> bit_lengths;
+    bit_lengths.reserve(288);
+    for(int i = 0; i < 144; ++i) { bit_lengths.push_back(8u); }
+    for(int i = 144; i < 256; ++i) { bit_lengths.push_back(9u); }
+    for(int i = 256; i < 280; ++i) { bit_lengths.push_back(7u); }
+    for(int i = 280; i < 288; ++i) { bit_lengths.push_back(8u); }
+
+    // generate the codes for each bit-length
     std::vector<Huffman_code> huffman_codes;
-    huffman_codes.resize(288);
-    for(int i = 0; i < 144; ++i) { huffman_codes[i].bit_length = 8u; }
-    for(int i = 144; i < 256; ++i) { huffman_codes[i].bit_length = 9u; }
-    for(int i = 256; i < 280; ++i) { huffman_codes[i].bit_length = 7u; }
-    for(int i = 280; i < 288; ++i) { huffman_codes[i].bit_length = 8u; }
+    huffman_codes.reserve(288);
+    std::uint32_t code {0u}; // the smallest valid code
+    for(std::uint32_t i = 7; i < 10; ++i) {
+        for(std::size_t j = 0u; j < bit_lengths.size(); ++j) {
+            if(bit_lengths[j] != i) continue;
 
-    std::array<std::uint32_t, 10> smallest_codes; // smallest codes per bit-lengths
-    std::uint32_t minimum_code {0u};
-    // find the smallest code per bit-length
-    for(int i = 1; i <= 9; ++i) {
-        minimum_code = (minimum_code + bl_count[i - 1]) << 1u;
-        smallest_codes[i] = minimum_code;
+            huffman_codes.emplace_back(code, i, static_cast<std::uint32_t>(j));
+            // within a bit-length, the codes are assigned consecutive values
+            ++code;
+        }
+
+        // an extra bit must be added just before going to the next bit-length
+        code <<= 1u;
     }
 
-    // assign consecutive values to all the codes that have the same bit-length
-    for(int i = 0; i < 288; ++i) {
-        const std::uint32_t bit_length {huffman_codes[i].bit_length};
-
-        huffman_codes[i].code = smallest_codes[bit_length];
-        smallest_codes[bit_length] += 1;
-
-        huffman_codes[i].symbol = i;
-    }
-
-    // sort to be able to do binary searches
-    std::sort(huffman_codes.begin(), huffman_codes.end());
     return huffman_codes;
 }
 
@@ -220,11 +200,12 @@ std::uint32_t sel::impl::deflate::fetch_symbol_in_fixed_block(const std::vector<
     for(int i = 7; i < 10; ++i) {
         std::uint32_t code {bitstream.peek_bits(i)};
         code = bitswap_from_lsbit(code, i);
-        auto iter {std::lower_bound(huffman_codes.begin(), huffman_codes.end(), code, [](const Huffman_code hc, const std::uint32_t value) { return hc.code < value; })};
 
-        if(iter != huffman_codes.end() and iter->code == code) {
-            bitstream.skip_bits(i);
-            return iter->symbol;
+        for(const Huffman_code& hc : huffman_codes) {
+            if(hc.code == code and hc.bit_length == i) {
+                bitstream.skip_bits(i);
+                return hc.symbol;
+            }
         }
     }
 
@@ -243,30 +224,28 @@ std::vector<sel::impl::deflate::Huffman_code> sel::impl::deflate::make_huffman_c
         bl_count[bit_lengths[i]] += 1u;
     }
 
-    std::vector<std::uint32_t> smallest_codes; // smallest codes per bit-lengths
-    smallest_codes.resize(bl_count.size());
-    std::uint32_t minimum_code {0u};
-    // find the smallest code per bit-length
-    for(std::size_t i = 1u; i <= smallest_codes.size() - 1u; ++i) {
-        minimum_code = (minimum_code + bl_count[i - 1u]) << 1u;
-        smallest_codes[i] = minimum_code;
-    }
-
-    // assign consecutive values to all the codes that have the same bit-length
+    // generate the codes for each bit-length
     std::vector<Huffman_code> huffman_codes;
-    huffman_codes.reserve(bit_lengths.size() - bl_count[0]); // codes with bit-lengths of zero are invalid
-    for(std::size_t i = 0u; i < bit_lengths.size(); ++i) {
-        const std::uint32_t bit_length {bit_lengths[i]};
-        if(bit_length != 0u) {
-            std::uint32_t code = smallest_codes[bit_length];
-            smallest_codes[bit_length] += 1;
+    std::uint32_t code {0u}; // the smallest valid code
+    for(std::uint32_t i = 1; i <= *iter; ++i) {
+        // an extra bit must be added just before going to the next bit-length
+        code <<= 1u;
+        /* the above "code <<= 1u;" must be before the below
+        * if(bl_count[i] == 0u) continue;" because there can be bl_counts that
+        * are equal to zero between bl_counts that aren't, and the left-shift
+        * must still be done
+        */
+        if(bl_count[i] == 0u) continue;
 
-            huffman_codes.emplace_back(code, bit_length, static_cast<std::uint32_t>(i));
+        for(std::size_t j = 0u; j < bit_lengths.size(); ++j) {
+            if(bit_lengths[j] != i) continue;
+
+            huffman_codes.emplace_back(code, i, static_cast<std::uint32_t>(j));
+            // within a bit-length, the codes are assigned consecutive values
+            ++code;
         }
     }
 
-    // sort to be able to do binary searches
-    std::sort(huffman_codes.begin(), huffman_codes.end());
     return huffman_codes;
 }
 
@@ -275,11 +254,12 @@ std::uint32_t sel::impl::deflate::fetch_symbol_in_dynamic_block(const std::vecto
     for(std::uint32_t i = 1u; i < 16u; ++i) {
         std::uint32_t code {bitstream.peek_bits(i)};
         code = bitswap_from_lsbit(code, i);
-        auto iter {std::lower_bound(huffman_codes.begin(), huffman_codes.end(), code, [](const Huffman_code hc, const std::uint32_t value) { return hc.code < value; })};
 
-        if(iter != huffman_codes.end() and iter->code == code) {
-            bitstream.skip_bits(i);
-            return iter->symbol;
+        for(const Huffman_code& hc : huffman_codes) {
+            if(hc.code == code and hc.bit_length == i) {
+                bitstream.skip_bits(i);
+                return hc.symbol;
+            }
         }
     }
 
@@ -288,13 +268,16 @@ std::uint32_t sel::impl::deflate::fetch_symbol_in_dynamic_block(const std::vecto
 
 void sel::impl::deflate::lz77_copy(std::vector<std::uint8_t>& inflated_data, const std::uint32_t length, const std::uint32_t distance)
 {
-    auto beginning_of_copy {inflated_data.end() - distance};
-    auto copy_from_iter {beginning_of_copy};
+    const std::size_t beginning_of_copy {inflated_data.size() - distance};
+    std::size_t copy_from {beginning_of_copy};
+
+    inflated_data.reserve(inflated_data.size() + length);
     for(std::uint32_t i = 0u; i < length; ++i) {
-        inflated_data.push_back(*copy_from_iter);
-        ++copy_from_iter;
-        if(copy_from_iter == inflated_data.end()) {
-            copy_from_iter = beginning_of_copy;
+        const std::uint8_t value_to_copy {inflated_data[copy_from]};
+        inflated_data.push_back(value_to_copy);
+        ++copy_from;
+        if(copy_from == inflated_data.size()) {
+            copy_from = beginning_of_copy;
         }
     }
 }

@@ -11,7 +11,7 @@ namespace sel {
 }
 
 namespace sel::impl::deflate {
-    // base sizes for length symbols (257~285)
+    // base lengths for length symbols (257~285)
     constexpr std::array<std::uint32_t, 29> length_bases {
         3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
         35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258
@@ -23,7 +23,7 @@ namespace sel::impl::deflate {
         3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0
     };
 
-    // base offsets for distance symbols (0~29)
+    // base distances for distance symbols (0~29)
     constexpr std::array<std::uint32_t, 30> distance_bases {
         1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
         257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145,
@@ -38,9 +38,8 @@ namespace sel::impl::deflate {
 
     struct Huffman_code {
         Huffman_code() noexcept {}
+        // just for emplace_back
         Huffman_code(std::uint32_t a_code, std::uint32_t a_bit_length, std::uint32_t a_symbol) noexcept : code {a_code}, bit_length {a_bit_length}, symbol {a_symbol} {}
-
-        constexpr std::strong_ordering operator<=>(const Huffman_code& rhs) const;
 
         std::uint32_t code {0u};
         std::uint32_t bit_length {0u};
