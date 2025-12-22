@@ -5,12 +5,9 @@
 std::vector<std::uint8_t> sel::decompress_deflate(std::span<const std::uint8_t> deflate_data)
 {
     impl::Bitstream bitstream {deflate_data};
-    std::uint32_t bfinal {bitstream.peek_bits(1)};
-    if(bfinal) throw Exception {Error::bad_formed_data};
-
     std::vector<std::uint8_t> inflated_data;
     inflated_data.reserve(5000); // 5KB
-
+    std::uint32_t bfinal {0u};
     do {
         bfinal = bitstream.read_bits(1);
         const std::uint32_t btype {bitstream.read_bits(2)};
