@@ -1,4 +1,18 @@
 #include "shared.hpp"
+#include <sstream>
+
+sel::Exception::Exception(Error error, std::source_location sl)
+    : m_error {error}, m_source_location {sl}
+{
+    std::ostringstream ostr;
+    ostr << "SELEBITS-EXCEPTION REPORT:\n"
+        << "Function name: " << sl.function_name() << '\n'
+        << "File name: " << sl.file_name() << '\n'
+        << "Line: " << sl.line() << '\n'
+        << "Column: " << sl.column() << '\n';
+
+    m_message = ostr.str();
+}
 
 std::span<const std::uint8_t> sel::impl::Bytestream::get_bytes(const std::size_t amount)
 {

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <source_location>
 #include <type_traits>
 #include <concepts>
@@ -18,11 +19,13 @@ namespace sel {
 
     class Exception : public std::exception {
     public:
-        Exception(Error error, std::source_location sl = std::source_location::current()) noexcept : m_error {error}, m_source_location {sl} {}
-
+        Exception(Error error, std::source_location sl = std::source_location::current());
+        
+        const char* what() const noexcept final { return m_message.c_str(); }
         Error error() const noexcept { return m_error; }
         std::source_location source_location() const noexcept { return m_source_location; }
     private:
+        std::string m_message;
         std::source_location m_source_location;
         Error m_error;
     };
