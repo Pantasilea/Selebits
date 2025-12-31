@@ -4,7 +4,7 @@
 
 std::vector<std::uint8_t> sel::decompress_deflate(std::span<const std::uint8_t> deflate_data)
 {
-    impl::Bitstream bitstream {deflate_data};
+    impl::deflate::Deflate_bitstream bitstream {deflate_data};
     std::vector<std::uint8_t> inflated_data;
     inflated_data.reserve(5000); // 5KB
     std::uint32_t bfinal {0u};
@@ -30,7 +30,7 @@ std::vector<std::uint8_t> sel::decompress_deflate(std::span<const std::uint8_t> 
     return inflated_data;
 }
 
-void sel::impl::deflate::decompress_uncompressed(std::vector<std::uint8_t>& inflated_data, Bitstream& bitstream)
+void sel::impl::deflate::decompress_uncompressed(std::vector<std::uint8_t>& inflated_data, Deflate_bitstream& bitstream)
 {
     std::uint32_t len {bitstream.read_bits(16)};
     std::uint32_t nlen {bitstream.read_bits(16)};
@@ -41,7 +41,7 @@ void sel::impl::deflate::decompress_uncompressed(std::vector<std::uint8_t>& infl
     inflated_data.insert(inflated_data.end(), uncompressed_data.begin(), uncompressed_data.end());
 }
 
-void sel::impl::deflate::decompress_fixed(std::vector<std::uint8_t>& inflated_data, Bitstream& bitstream)
+void sel::impl::deflate::decompress_fixed(std::vector<std::uint8_t>& inflated_data, Deflate_bitstream& bitstream)
 {
     static const std::vector<Huffman_code> huffman_codes(make_fixed_huffman_table());
     std::uint32_t symbol {fetch_symbol_in_fixed_block(huffman_codes, bitstream)};
@@ -69,7 +69,7 @@ void sel::impl::deflate::decompress_fixed(std::vector<std::uint8_t>& inflated_da
     }
 }
 
-void sel::impl::deflate::decompress_dynamic(std::vector<std::uint8_t>& inflated_data, Bitstream& bitstream)
+void sel::impl::deflate::decompress_dynamic(std::vector<std::uint8_t>& inflated_data, Deflate_bitstream& bitstream)
 {
     const std::uint32_t hlit {bitstream.read_bits(5) + 257u};
     const std::uint32_t hdist {bitstream.read_bits(5) + 1u};
@@ -192,7 +192,7 @@ std::vector<sel::impl::deflate::Huffman_code> sel::impl::deflate::make_fixed_huf
     return huffman_codes;
 }
 
-std::uint32_t sel::impl::deflate::fetch_symbol_in_fixed_block(const std::vector<Huffman_code>& huffman_codes, Bitstream& bitstream)
+std::uint32_t sel::impl::deflate::fetch_symbol_in_fixed_block(const std::vector<Huffman_code>& huffman_codes, Deflate_bitstream& bitstream)
 {
     for(int i = 7; i < 10; ++i) {
         std::uint32_t code {bitstream.peek_bits(i)};
@@ -206,7 +206,7 @@ std::uint32_t sel::impl::deflate::fetch_symbol_in_fixed_block(const std::vector<
         }
     }
 
-    throw sel::Exception {sel::Error::bad_formed_data};
+    throw Exception {Error::bad_formed_data};
 }
 
 std::vector<sel::impl::deflate::Huffman_code> sel::impl::deflate::make_huffman_codes_from_bit_lengths(std::span<const std::uint32_t> bit_lengths)
@@ -246,7 +246,7 @@ std::vector<sel::impl::deflate::Huffman_code> sel::impl::deflate::make_huffman_c
     return huffman_codes;
 }
 
-std::uint32_t sel::impl::deflate::fetch_symbol_in_dynamic_block(const std::vector<Huffman_code>& huffman_codes, Bitstream& bitstream)
+std::uint32_t sel::impl::deflate::fetch_symbol_in_dynamic_block(const std::vector<Huffman_code>& huffman_codes, Deflate_bitstream& bitstream)
 {
     for(std::uint32_t i = 1u; i < 16u; ++i) {
         std::uint32_t code {bitstream.peek_bits(i)};

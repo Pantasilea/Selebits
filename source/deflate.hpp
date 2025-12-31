@@ -46,17 +46,19 @@ namespace sel::impl::deflate {
         std::uint32_t symbol {0u};
     };
 
-    void decompress_uncompressed(std::vector<std::uint8_t>& inflated_data, Bitstream& bitstream);
-    void decompress_fixed(std::vector<std::uint8_t>& inflated_data, Bitstream& bitstream);
-    void decompress_dynamic(std::vector<std::uint8_t>& inflated_data, Bitstream& bitstream);
+    using Deflate_bitstream = Bitstream<Bitstream_format::gif>;
+
+    void decompress_uncompressed(std::vector<std::uint8_t>& inflated_data, Deflate_bitstream& bitstream);
+    void decompress_fixed(std::vector<std::uint8_t>& inflated_data, Deflate_bitstream& bitstream);
+    void decompress_dynamic(std::vector<std::uint8_t>& inflated_data, Deflate_bitstream& bitstream);
 
     std::vector<Huffman_code> make_fixed_huffman_table(); // for literals and lengths
     // used in decompress_dynamic
     std::vector<Huffman_code> make_huffman_codes_from_bit_lengths(std::span<const std::uint32_t> bit_lengths);
 
     // for literals and lengths (fetch_symbol_in_fixed_block)
-    std::uint32_t fetch_symbol_in_fixed_block(const std::vector<Huffman_code>& huffman_codes, Bitstream& bitstream);
-    std::uint32_t fetch_symbol_in_dynamic_block(const std::vector<Huffman_code>& huffman_codes, Bitstream& bitstream);
+    std::uint32_t fetch_symbol_in_fixed_block(const std::vector<Huffman_code>& huffman_codes, Deflate_bitstream& bitstream);
+    std::uint32_t fetch_symbol_in_dynamic_block(const std::vector<Huffman_code>& huffman_codes, Deflate_bitstream& bitstream);
 
     void lz77_copy(std::vector<std::uint8_t>& inflated_data, const std::uint32_t length, const std::uint32_t distance);
 }

@@ -129,6 +129,16 @@ namespace sel::impl {
         return result;
     }
 
+    enum class Bitstream_format {
+        /* in the examples, 'a' is a 10 bits value and 'b' is a 6 bits value.
+        * 'a' is the first value in the bit-stream and 'b' is the second.
+        * the numbers inside the parenthesis indicate the significant bits
+        * of the values, 0 is the less significant bit. */
+        gif, // byte 0: aaaaaaaa (76543210), byte 1: bbbbbbaa (54321098)
+        jpg // byte 0: aaaaaaaa (98765432), byte 1: aabbbbbb (10543210)
+    };
+
+    template<Bitstream_format format>
     class Bitstream {
     public:
         Bitstream(std::span<const std::uint8_t> source) noexcept : m_source {source} {}
@@ -139,18 +149,12 @@ namespace sel::impl {
         void skip_until_next_byte_boundary();
 
         std::span<const std::uint8_t> read_bytes(const std::uint32_t amount);
-
-        bool eof() const { return m_eof; }
-        void allow_exceptions() { m_can_throw = true; }
-        void disallow_exceptions() { m_can_throw = false; }
     private:
-        // get_bits_FORMAT
-        //std::uint32_t get_bits_gif(const std::uint32_t amount);
+        // [verb]_bits_FORMAT
+        //std::uint32_t read_bits_lsbit(const std::uint32_t amount);
 
         std::span<const std::uint8_t> m_source;
         std::size_t m_current_byte_index {0u};
         std::uint32_t m_useful_bits_in_current_byte {8u};
-        bool m_eof {false};
-        bool m_can_throw {true};
     };
 }
