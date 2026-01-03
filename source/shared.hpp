@@ -14,7 +14,8 @@ namespace sel {
     enum class Error {
         none,
         bug,
-        bad_formed_data
+        bad_formed_data,
+        unexpected_eof
     };
 
     class Exception : public std::exception {

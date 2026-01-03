@@ -17,11 +17,11 @@ sel::Exception::Exception(Error error, std::source_location sl)
 std::span<const std::uint8_t> sel::impl::Bytestream::get_bytes(const std::size_t amount)
 {
     if(m_current_byte_index > (m_source.size() - 1u)) {
-        throw Exception {Error::bad_formed_data};
+        throw Exception {Error::unexpected_eof};
     }
 
     if(m_current_byte_index + amount > m_source.size()) {
-        throw Exception {Error::bad_formed_data};
+        throw Exception {Error::unexpected_eof};
     }
 
     std::span<const std::uint8_t> result(m_source.begin() + m_current_byte_index, amount);
@@ -35,7 +35,7 @@ std::uint32_t sel::impl::Bitstream<format>::read_bits(const std::uint32_t amount
     if(amount == 0u) return 0u;
     
     if(m_current_byte_index > (m_source.size() - 1u)) {
-        throw Exception {Error::bad_formed_data};
+        throw Exception {Error::unexpected_eof};
     }
 
     std::uint32_t bits_taken {0u};
@@ -69,7 +69,7 @@ std::uint32_t sel::impl::Bitstream<format>::read_bits(const std::uint32_t amount
             // go to the next byte
             ++m_current_byte_index;
             if(m_current_byte_index > (m_source.size() - 1u)) {
-                throw Exception {Error::bad_formed_data};
+                throw Exception {Error::unexpected_eof};
             }
             m_useful_bits_in_current_byte = 8u;
         }
@@ -99,7 +99,7 @@ void sel::impl::Bitstream<format>::skip_bits(const std::uint32_t amount)
     if(amount == 0u) return;
 
     if(m_current_byte_index > (m_source.size() - 1u)) {
-        throw Exception {Error::bad_formed_data};
+        throw Exception {Error::unexpected_eof};
     }
 
     std::uint32_t bits_skipped {0};
@@ -115,7 +115,7 @@ void sel::impl::Bitstream<format>::skip_bits(const std::uint32_t amount)
             // go to the next byte
             ++m_current_byte_index;
             if(m_current_byte_index > (m_source.size() - 1u)) {
-                throw Exception {Error::bad_formed_data};
+                throw Exception {Error::unexpected_eof};
             }
             m_useful_bits_in_current_byte = 8u;
         }
@@ -129,7 +129,7 @@ void sel::impl::Bitstream<format>::skip_until_next_byte_boundary()
     
     ++m_current_byte_index;
     if(m_current_byte_index > (m_source.size() - 1u)) {
-        throw Exception {Error::bad_formed_data};
+        throw Exception {Error::unexpected_eof};
     }
     m_useful_bits_in_current_byte = 8u;
 }
@@ -140,14 +140,14 @@ std::span<const std::uint8_t> sel::impl::Bitstream<format>::read_bytes(const std
     if(amount == 0u) return {};
 
     if(m_current_byte_index + amount > m_source.size()) {
-        throw Exception {Error::bad_formed_data};
+        throw Exception {Error::unexpected_eof};
     }
 
     std::span<const std::uint8_t> result {m_source.begin() + m_current_byte_index, amount};
 
     // book-keeping
     m_current_byte_index += amount;
-    if(m_current_byte_index > m_source.size() - 1u) {
+    if(m_current_byte_index == m_source.size()) {
         m_useful_bits_in_current_byte = 0u;
     }
     else { m_useful_bits_in_current_byte = 8u; }
