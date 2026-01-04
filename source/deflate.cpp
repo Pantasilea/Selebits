@@ -198,8 +198,8 @@ std::uint32_t sel::impl::deflate::fetch_symbol_in_fixed_block(const std::vector<
         std::uint32_t code {bitstream.peek_bits(i)};
         code = bitswap_from_lsbit(code, i);
 
-        for(const Huffman_code& hc : huffman_codes) {
-            if(hc.code == code and hc.bit_length == i) {
+        for(const Huffman_code hc : huffman_codes) {
+            if(hc.bit_length == i and hc.code == code) {
                 bitstream.skip_bits(i);
                 return hc.symbol;
             }
@@ -252,8 +252,8 @@ std::uint32_t sel::impl::deflate::fetch_symbol_in_dynamic_block(const std::vecto
         std::uint32_t code {bitstream.peek_bits(i)};
         code = bitswap_from_lsbit(code, i);
 
-        for(const Huffman_code& hc : huffman_codes) {
-            if(hc.code == code and hc.bit_length == i) {
+        for(const Huffman_code hc : huffman_codes) {
+            if(hc.bit_length == i and hc.code == code) {
                 bitstream.skip_bits(i);
                 return hc.symbol;
             }

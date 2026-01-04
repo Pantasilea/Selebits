@@ -33,15 +33,20 @@ template<sel::impl::Bitstream_format format>
 std::uint32_t sel::impl::Bitstream<format>::read_bits(const std::uint32_t amount)
 {
     if(amount == 0u) return 0u;
-    
-    if(m_current_byte_index > (m_source.size() - 1u)) {
-        throw Exception {Error::unexpected_eof};
-    }
 
     std::uint32_t bits_taken {0u};
     std::uint32_t result {0u};
 
     while(bits_taken < amount) {
+        if(m_useful_bits_in_current_byte == 0u) {
+            // go to the next byte
+            ++m_current_byte_index;
+            if(m_current_byte_index > (m_source.size() - 1u)) {
+                throw Exception {Error::unexpected_eof};
+            }
+            m_useful_bits_in_current_byte = 8u;
+        }
+
         std::uint32_t bits_to_take {amount - bits_taken};
         if(bits_to_take > m_useful_bits_in_current_byte) { bits_to_take = m_useful_bits_in_current_byte; }
 
@@ -64,15 +69,6 @@ std::uint32_t sel::impl::Bitstream<format>::read_bits(const std::uint32_t amount
         // book-keep
         bits_taken += bits_to_take;
         m_useful_bits_in_current_byte -= bits_to_take;
-
-        if(m_useful_bits_in_current_byte == 0u) {
-            // go to the next byte
-            ++m_current_byte_index;
-            if(m_current_byte_index > (m_source.size() - 1u)) {
-                throw Exception {Error::unexpected_eof};
-            }
-            m_useful_bits_in_current_byte = 8u;
-        }
     }
 
     return result;
@@ -81,8 +77,6 @@ std::uint32_t sel::impl::Bitstream<format>::read_bits(const std::uint32_t amount
 template<sel::impl::Bitstream_format format>
 std::uint32_t sel::impl::Bitstream<format>::peek_bits(const std::uint32_t amount)
 {
-    if(amount == 0u) return 0u;
-
     const std::size_t copy1 {m_current_byte_index};
     const std::uint32_t copy2 {m_useful_bits_in_current_byte};
 
@@ -98,19 +92,8 @@ void sel::impl::Bitstream<format>::skip_bits(const std::uint32_t amount)
 {
     if(amount == 0u) return;
 
-    if(m_current_byte_index > (m_source.size() - 1u)) {
-        throw Exception {Error::unexpected_eof};
-    }
-
     std::uint32_t bits_skipped {0};
     while(bits_skipped < amount) {
-        std::uint32_t bits_to_skip {amount - bits_skipped};
-        if(bits_to_skip > m_useful_bits_in_current_byte) { bits_to_skip = m_useful_bits_in_current_byte; }
-
-        // book-keep
-        bits_skipped += bits_to_skip;
-        m_useful_bits_in_current_byte -= bits_to_skip;
-
         if(m_useful_bits_in_current_byte == 0u) {
             // go to the next byte
             ++m_current_byte_index;
@@ -119,6 +102,13 @@ void sel::impl::Bitstream<format>::skip_bits(const std::uint32_t amount)
             }
             m_useful_bits_in_current_byte = 8u;
         }
+
+        std::uint32_t bits_to_skip {amount - bits_skipped};
+        if(bits_to_skip > m_useful_bits_in_current_byte) { bits_to_skip = m_useful_bits_in_current_byte; }
+
+        // book-keep
+        bits_skipped += bits_to_skip;
+        m_useful_bits_in_current_byte -= bits_to_skip;
     }
 }
 
